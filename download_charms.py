@@ -4,6 +4,7 @@ import re
 import sys
 import zipfile
 import subprocess
+import urllib.request
 from pathlib import Path
 
 try:
@@ -11,6 +12,8 @@ try:
     HAS_YAML = True
 except ImportError:
     HAS_YAML = False
+
+SKILL_RAW_URL = "https://raw.githubusercontent.com/canonical/charm-download-and-debugger/main/charm-analysis-skill.md"
 
 
 def read_status_input():
@@ -61,12 +64,10 @@ def parse_tabular_status(raw_text):
             in_apps_section = False
             continue
 
-        # Detect the start of the Applications section
         if re.match(r"^App\s+Version\s+Status", line):
             in_apps_section = True
             headers_info = []
             
-            # Map the exact starting index of each header column
             matches = list(re.finditer(r'\S+', line))
             for i, match in enumerate(matches):
                 next_start = matches[i+1].start() if i + 1 < len(matches) else None
@@ -77,14 +78,12 @@ def parse_tabular_status(raw_text):
                 })
             continue
 
-        # Stop parsing apps if we hit a different section (like Units, Machines)
         if in_apps_section and re.match(r"^(Unit|Machine|Storage|Relation|Integration|Offer|SAAS)\s+", line):
             in_apps_section = False
             continue
 
         if in_apps_section:
             row_data = {}
-            # Extract data strictly by character position
             for h in headers_info:
                 val = ""
                 if h["start"] < len(line):
@@ -100,12 +99,9 @@ def parse_tabular_status(raw_text):
             channel = row_data.get("Channel")
             rev_str = row_data.get("Rev")
 
-            # Clean up missing data represented by '-' or empty string
             if charm_name == "-": charm_name = None
             if channel == "-": channel = None
-            revision = None
-            if rev_str and rev_str.isdigit():
-                revision = int(rev_str)
+            revision = int(rev_str) if rev_str and rev_str.isdigit() else None
 
             if charm_name:
                 key = (charm_name, channel, revision)
@@ -201,7 +197,7 @@ def download_and_unzip(charm_info, output_dir):
 
     try:
         subprocess.run(cmd, cwd=target_dir, check=True)
-    except (subprocess.CalledProcessError, FileNotFoundError) as e:
+    except (subprocess.CalledProcessError, FileNotFoundError):
         print(f"[-] Failed to download {charm_name}. Ensure 'juju' CLI is available in PATH.")
         return
 
@@ -221,15 +217,37 @@ def download_and_unzip(charm_info, output_dir):
     print(f"[✓] Code ready at: {extract_path}")
 
 
+def install_ai_skill_instructions(output_dir):
+    """Downloads the canonical AI skill file and writes it to standard instruction locations."""
+    print("\n[+] Fetching AI skill instructions from GitHub...")
+    try:
+        req = urllib.request.Request(
+            SKILL_RAW_URL, 
+            headers={"User-Agent": "Mozilla/5.0"}
+        )
+        with urllib.request.urlopen(req) as response:
+            skill_content = response.read().decode("utf-8")
+
+        # 1. Save as SKILL.md (Universal standard)
+        skill_file = output_dir / "SKILL.md"
+        skill_file.write_text(skill_content, encoding="utf-8")
+
+        # 2. Save inside .github/copilot-instructions.md (VS Code GitHub Copilot standard)
+        github_dir = output_dir / ".github"
+        github_dir.mkdir(exist_ok=True)
+        copilot_file = github_dir / "copilot-instructions.md"
+        copilot_file.write_text(skill_content, encoding="utf-8")
+
+        print(f"[✓] Skill installed at: {skill_file.name} & {github_dir.name}/copilot-instructions.md")
+    except Exception as e:
+        print(f"[-] Warning: Failed to fetch skill file from GitHub ({e}).")
+
+
 def main():
     raw_status = read_status_input()
     
     structured_data = parse_json_or_yaml_status(raw_status)
-    
-    if structured_data:
-        charms = extract_charms_from_structured_data(structured_data)
-    else:
-        charms = parse_tabular_status(raw_status)
+    charms = extract_charms_from_structured_data(structured_data) if structured_data else parse_tabular_status(raw_status)
 
     if not charms:
         print("No valid charm information could be parsed from the provided status output.")
@@ -246,6 +264,9 @@ def main():
 
     for charm_info in selected_charms:
         download_and_unzip(charm_info, output_base)
+
+    # Download and attach AI agent instructions to workspace root
+    install_ai_skill_instructions(output_base)
 
     print(f"\n" + "=" * 50)
     print(f"Done! Open in VS Code with Copilot using:")
