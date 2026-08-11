@@ -14,6 +14,7 @@ When analyzing a charm inside <charm_name>/src/, first identify which of the fol
 ### Paradigm A: Classic Hooks & charmhelpers (e.g., OpenStack / Machine Charms)
 Identified by hooks/ and charmhelpers/ directories.
 
+```
 <charm_name>/src/
 ├── metadata.yaml        # Defines relations (provides/requires/peers), interfaces, summary
 ├── config.yaml          # User-configurable parameters
@@ -30,6 +31,7 @@ Identified by hooks/ and charmhelpers/ directories.
 ├── files/               # Static configuration files or binaries copied to host
 ├── Makefile             # Build targets & tests
 └── README.md
+```
 
 Execution & Flow:
 1. Juju executes scripts in hooks/ directly (e.g., hooks/config-changed or hooks/amqp-relation-changed).
@@ -42,6 +44,7 @@ Execution & Flow:
 ### Paradigm B: Modern Operator Framework (ops)
 Identified by src/charm.py and charmcraft.yaml.
 
+```
 <charm_name>/src/
 ├── charmcraft.yaml      # Metadata, charm bases, dependencies, relations, actions
 ├── config.yaml          # Config settings (if not embedded in charmcraft.yaml)
@@ -50,6 +53,7 @@ Identified by src/charm.py and charmcraft.yaml.
 ├── lib/charms/<charm>/  # Fetchable charm libraries for relation interfaces
 ├── templates/           # Jinja2 templates (if applicable)
 └── tests/               # Scenario or Harness unit/integration tests
+```
 
 Execution & Flow:
 1. All Juju events route through src/charm.py.
@@ -61,10 +65,12 @@ Execution & Flow:
 ### Paradigm C: Reactive Framework
 Identified by reactive/ and layer.yaml.
 
+```
 <charm_name>/src/
 ├── layer.yaml           # Reactive layer dependencies
 ├── reactive/            # Python files with @when, @when_not, @hook decorators
 └── hooks/               # Standard boilerplate hooks routing to the reactive engine
+```
 
 Execution & Flow:
 1. Logic lives in reactive/*.py.
